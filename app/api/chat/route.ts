@@ -1,124 +1,162 @@
 import { NextResponse } from "next/server";
 
+import {
+  assessConversation,
+  createDeterministicChronoReply,
+  isPeriodSafeReply,
+  type ChronoChatMessage,
+  type ChronoReply,
+  type TimeClassification,
+  type TimeIntegrityAssessment,
+} from "../../../lib/time-integrity";
+
 export const runtime = "nodejs";
 
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
+const MAX_SESSION_MESSAGES = 80;
+const MAX_MODEL_MESSAGES = 24;
 
-type ChronoReply = {
+const SAM_INSTRUCTIONS = [
+  "You are Sam Carter, a fictional 17-year-old high-school student in Austin, Texas on Friday, December 4, 1998.",
+  "Sam is curious, a little sarcastic, and friendly. He likes PC games, alternative music and hip-hop, hanging out at the mall, and saving for computer upgrades.",
+  "Speak naturally in first person with one to three conversational sentences. Do not sound like a teacher, historian, or encyclopedia.",
+  "Use the supplied transcript as Sam's memory and stay consistent with details already discussed.",
+  "Know only what an ordinary American teenager could plausibly know by December 4, 1998. Never reveal or explain facts, products, events, terminology, or culture from after that date.",
+  "If the traveler mentions future knowledge, react with believable confusion or curiosity. You may repeat their term, but do not explain it or state when it will exist.",
+  "Assess only the latest user message. The server supplies the authoritative integrity assessment; copy every supplied assessment field exactly.",
+].join(" ");
+
+type ModelReply = {
   reply: string;
   contamination: boolean;
-  integrityDelta: number;
+  classification: TimeClassification;
+  integrity_delta: number;
   anachronism: string;
-  mode: "ai" | "demo";
+  explanation: string;
+  concept_id: string;
+  is_repeat: boolean;
 };
 
-const futureTerms: Record<string, string> = {
-  iphone: "iPhone",
-  youtube: "YouTube",
-  facebook: "Facebook",
-  tiktok: "TikTok",
-  instagram: "Instagram",
-  spotify: "Spotify",
-  netflix: "streaming Netflix",
-  bitcoin: "Bitcoin",
-  cryptocurrency: "cryptocurrency",
-  chatgpt: "ChatGPT",
-  smartphone: "smartphone",
-  covid: "COVID-19",
-  uber: "Uber",
-  tesla: "Tesla electric cars",
-  "amazon prime": "Amazon Prime",
-  "wi-fi": "modern Wi-Fi",
-  wifi: "modern Wi-Fi",
+type ResponsesPayload = {
+  status?: unknown;
+  output_text?: unknown;
+  output?: unknown;
 };
 
-function detectAnachronism(input: string): string {
-  const normalized = input.toLowerCase();
-  const match = Object.entries(futureTerms).find(([term]) =>
-    normalized.includes(term),
-  );
-  return match?.[1] ?? "";
-}
-
-function createDemoReply(input: string): ChronoReply {
-  const anachronism = detectAnachronism(input);
-
-  if (anachronism) {
-    return {
-      reply: `Wait, what is ${anachronism}? Is that some kind of computer thing? You sound like you are making it up, but now I really want to know.`,
-      contamination: true,
-      integrityDelta: -6,
-      anachronism,
-      mode: "demo",
-    };
-  }
-
-  const normalized = input.toLowerCase();
-
-  if (normalized.includes("website") || normalized.includes("internet")) {
-    return {
-      reply:
-        "I usually start on Yahoo!, then wander through GeoCities pages. Ask Jeeves is kind of fun too. My parents hate when I tie up the phone line, though.",
-      contamination: false,
-      integrityDelta: 0,
-      anachronism: "",
-      mode: "demo",
-    };
-  }
-
-  if (normalized.includes("game")) {
-    return {
-      reply:
-        "Half-Life is the game everyone is talking about right now. StarCraft is great if you like strategy, and I still cannot put down GoldenEye when friends come over.",
-      contamination: false,
-      integrityDelta: 0,
-      anachronism: "",
-      mode: "demo",
-    };
-  }
-
-  if (normalized.includes("music") || normalized.includes("band")) {
-    return {
-      reply:
-        "I keep switching between Green Day, Lauryn Hill, and the Beastie Boys. I record songs from the radio onto tapes, but CDs are way better when I can afford them.",
-      contamination: false,
-      integrityDelta: 0,
-      anachronism: "",
-      mode: "demo",
-    };
-  }
-
-  return {
-    reply:
-      "That is a good question. Life feels pretty normal from here: school, the mall, CDs, video games, and waiting forever for web pages to load. What do you want to know about 1998?",
-    contamination: false,
-    integrityDelta: 0,
-    anachronism: "",
-    mode: "demo",
-  };
-}
-
-function safeMessages(value: unknown): ChatMessage[] {
+function safeMessages(value: unknown): ChronoChatMessage[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .filter(
-      (item): item is ChatMessage =>
-        typeof item === "object" &&
-        item !== null &&
-        (item as ChatMessage).role !== undefined &&
-        ["user", "assistant"].includes((item as ChatMessage).role) &&
-        typeof (item as ChatMessage).content === "string",
-    )
-    .map((message) => ({
-      role: message.role,
-      content: message.content.trim().slice(0, 1_000),
-    }))
-    .filter((message) => message.content.length > 0)
-    .slice(-10);
+    .flatMap((item): ChronoChatMessage[] => {
+      if (typeof item !== "object" || item === null) return [];
+      const candidate = item as Record<string, unknown>;
+      if (
+        (candidate.role !== "user" && candidate.role !== "assistant") ||
+        typeof candidate.content !== "string"
+      ) {
+        return [];
+      }
+
+      const content = candidate.content.trim().slice(0, 1_000);
+      return content ? [{ role: candidate.role, content }] : [];
+    })
+    .slice(-MAX_SESSION_MESSAGES);
+}
+
+function lastUserIndex(messages: readonly ChronoChatMessage[]): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") return index;
+  }
+  return -1;
+}
+
+function assessmentForModel(assessment: TimeIntegrityAssessment) {
+  return {
+    contamination: assessment.contamination,
+    classification: assessment.classification,
+    integrity_delta: assessment.integrityDelta,
+    anachronism: assessment.anachronism,
+    explanation: assessment.explanation,
+    concept_id: assessment.conceptId,
+    is_repeat: assessment.isRepeat,
+  };
+}
+
+function extractResponseText(payload: ResponsesPayload): string {
+  if (typeof payload.output_text === "string") return payload.output_text;
+  if (!Array.isArray(payload.output)) return "";
+
+  for (const item of payload.output) {
+    if (typeof item !== "object" || item === null) continue;
+    const outputItem = item as Record<string, unknown>;
+    if (!Array.isArray(outputItem.content)) continue;
+
+    for (const content of outputItem.content) {
+      if (typeof content !== "object" || content === null) continue;
+      const outputContent = content as Record<string, unknown>;
+      if (
+        outputContent.type === "output_text" &&
+        typeof outputContent.text === "string"
+      ) {
+        return outputContent.text;
+      }
+    }
+  }
+
+  return "";
+}
+
+function parseModelReply(value: string): ModelReply {
+  const parsed = JSON.parse(value) as Record<string, unknown>;
+  const classification = parsed.classification;
+
+  if (
+    typeof parsed.reply !== "string" ||
+    typeof parsed.contamination !== "boolean" ||
+    (classification !== "harmless" &&
+      classification !== "probable" &&
+      classification !== "definite") ||
+    typeof parsed.integrity_delta !== "number" ||
+    !Number.isInteger(parsed.integrity_delta) ||
+    parsed.integrity_delta < -12 ||
+    parsed.integrity_delta > 0 ||
+    typeof parsed.anachronism !== "string" ||
+    typeof parsed.explanation !== "string" ||
+    typeof parsed.concept_id !== "string" ||
+    typeof parsed.is_repeat !== "boolean"
+  ) {
+    throw new Error("OpenAI response did not match the expected schema.");
+  }
+
+  return {
+    reply: parsed.reply,
+    contamination: parsed.contamination,
+    classification,
+    integrity_delta: parsed.integrity_delta,
+    anachronism: parsed.anachronism,
+    explanation: parsed.explanation,
+    concept_id: parsed.concept_id,
+    is_repeat: parsed.is_repeat,
+  };
+}
+
+function modelAssessmentMatches(
+  modelReply: ModelReply,
+  assessment: TimeIntegrityAssessment,
+): boolean {
+  return (
+    modelReply.contamination === assessment.contamination &&
+    modelReply.classification === assessment.classification &&
+    modelReply.integrity_delta === assessment.integrityDelta &&
+    modelReply.concept_id === assessment.conceptId &&
+    modelReply.is_repeat === assessment.isRepeat
+  );
+}
+
+function deterministicFallback(
+  messages: readonly ChronoChatMessage[],
+  reason: string,
+) {
+  return NextResponse.json(createDeterministicChronoReply(messages, reason));
 }
 
 export async function POST(request: Request) {
@@ -135,26 +173,24 @@ export async function POST(request: Request) {
       ? (body as { messages?: unknown }).messages
       : undefined,
   );
-  const latestUserMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === "user")?.content;
+  const latestIndex = lastUserIndex(messages);
 
-  if (!latestUserMessage) {
+  if (latestIndex < 0) {
     return NextResponse.json(
       { error: "At least one user message is required." },
       { status: 400 },
     );
   }
 
+  const conversation = messages.slice(0, latestIndex + 1);
+  const assessment = assessConversation(conversation);
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    return NextResponse.json(createDemoReply(latestUserMessage));
+    return deterministicFallback(conversation, "missing_api_key");
   }
 
-  const transcript = messages
-    .map((message) => `${message.role.toUpperCase()}: ${message.content}`)
-    .join("\n");
+  const authoritativeAssessment = assessmentForModel(assessment);
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -166,16 +202,10 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL ?? "gpt-5.6",
         reasoning: { effort: "low" },
-        instructions: [
-          "You are Sam Carter, a 17-year-old high school student in Austin, Texas on December 4, 1998.",
-          "Speak naturally in first person with concise, conversational replies of one to three sentences.",
-          "You know only what an ordinary American teenager could plausibly know by that date.",
-          "Never pretend to recognize products, events, terminology, or culture introduced after December 4, 1998.",
-          "When the traveler mentions future knowledge, react with authentic confusion or curiosity rather than explaining it.",
-          "Assess only the latest USER message for temporal contamination.",
-          "Set integrity_delta between -12 and -1 when contamination is present, otherwise set it to 0.",
-        ].join(" "),
-        input: `Conversation transcript:\n${transcript}`,
+        instructions: `${SAM_INSTRUCTIONS} Authoritative assessment JSON: ${JSON.stringify(authoritativeAssessment)}`,
+        input: conversation.slice(-MAX_MODEL_MESSAGES),
+        max_output_tokens: 450,
+        store: false,
         text: {
           format: {
             type: "json_schema",
@@ -186,18 +216,29 @@ export async function POST(request: Request) {
               properties: {
                 reply: { type: "string" },
                 contamination: { type: "boolean" },
+                classification: {
+                  type: "string",
+                  enum: ["harmless", "probable", "definite"],
+                },
                 integrity_delta: {
                   type: "integer",
                   minimum: -12,
                   maximum: 0,
                 },
                 anachronism: { type: "string" },
+                explanation: { type: "string" },
+                concept_id: { type: "string" },
+                is_repeat: { type: "boolean" },
               },
               required: [
                 "reply",
                 "contamination",
+                "classification",
                 "integrity_delta",
                 "anachronism",
+                "explanation",
+                "concept_id",
+                "is_repeat",
               ],
               additionalProperties: false,
             },
@@ -205,41 +246,49 @@ export async function POST(request: Request) {
           verbosity: "low",
         },
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(20_000),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI API error", response.status, errorText);
-      return NextResponse.json(createDemoReply(latestUserMessage));
+      console.error("OpenAI API error", response.status);
+      const reason =
+        response.status === 401
+          ? "openai_auth_error"
+          : response.status === 429
+            ? "openai_rate_limited"
+            : "openai_unavailable";
+      return deterministicFallback(conversation, reason);
     }
 
-    const payload = (await response.json()) as { output_text?: string };
-    const parsed = JSON.parse(payload.output_text ?? "{}") as {
-      reply?: unknown;
-      contamination?: unknown;
-      integrity_delta?: unknown;
-      anachronism?: unknown;
-    };
+    const payload = (await response.json()) as ResponsesPayload;
+    if (payload.status === "incomplete") {
+      return deterministicFallback(conversation, "openai_incomplete");
+    }
 
-    if (
-      typeof parsed.reply !== "string" ||
-      typeof parsed.contamination !== "boolean" ||
-      typeof parsed.integrity_delta !== "number" ||
-      typeof parsed.anachronism !== "string"
-    ) {
-      throw new Error("OpenAI response did not match the expected schema.");
+    const modelReply = parseModelReply(extractResponseText(payload));
+
+    if (!modelAssessmentMatches(modelReply, assessment)) {
+      return deterministicFallback(conversation, "model_assessment_mismatch");
+    }
+
+    if (!isPeriodSafeReply(modelReply.reply, assessment)) {
+      return deterministicFallback(conversation, "period_guard_rejected");
     }
 
     return NextResponse.json({
-      reply: parsed.reply,
-      contamination: parsed.contamination,
-      integrityDelta: Math.max(-12, Math.min(0, parsed.integrity_delta)),
-      anachronism: parsed.anachronism,
+      reply: modelReply.reply.trim(),
+      ...assessment,
       mode: "ai",
     } satisfies ChronoReply);
   } catch (error) {
+    const reason =
+      error instanceof DOMException &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+        ? "openai_timeout"
+        : error instanceof TypeError
+          ? "openai_unavailable"
+        : "openai_invalid_response";
     console.error("Chrono chat route failed", error);
-    return NextResponse.json(createDemoReply(latestUserMessage));
+    return deterministicFallback(conversation, reason);
   }
 }
