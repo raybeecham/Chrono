@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --experimental-strip-types --experimental-default-type=module --test tests/time-integrity.test.ts tests/retro-snake.test.ts tests/chrono-clip.test.ts tests/chrono-missions.test.ts tests/ai-provider.test.ts tests/wayback-1998.test.ts"
   },
   "dependencies": {
     "next": "16.2.10",
