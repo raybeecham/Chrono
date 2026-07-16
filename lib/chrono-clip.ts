@@ -26,6 +26,7 @@ const contextualTips: Record<Exclude<ChronoClipContext, null>, readonly string[]
   web: [
     "It looks like you’re browsing the World Wide Web! The NASA shuttle link is live on this date.",
     "Try the directory first. Search engines in 1998 still have plenty of competition.",
+    "Archive Lens steps outside the reconstruction so you can compare it with real Wayback Machine captures.",
   ],
   chat: [
     "Sam only knows what a teenager could know on December 4, 1998. Future words may disturb the timeline.",

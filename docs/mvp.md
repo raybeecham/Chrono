@@ -19,7 +19,7 @@ A judge can enter December 4, 1998, experience a period-specific computer interf
 
 - One excellent era: December 1998.
 - Responsive, accessible interface.
-- GPT-5.6 period-aware character.
+- Gemini or GPT-5.6 period-aware character, plus deterministic fallback.
 - Structured temporal-contamination output.
 - Offline fallback for reliable judging.
 - Clear setup instructions and deployable repository.

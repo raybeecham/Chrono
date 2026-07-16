@@ -39,16 +39,8 @@ type ChatResponse = {
   conceptId: string;
   isRepeat: boolean;
   mode: "ai" | "demo";
-  fallbackReason?:
-    | "missing_api_key"
-    | "openai_auth_error"
-    | "openai_rate_limited"
-    | "openai_unavailable"
-    | "openai_incomplete"
-    | "model_assessment_mismatch"
-    | "period_guard_rejected"
-    | "openai_timeout"
-    | "openai_invalid_response";
+  provider?: "gemini" | "openai";
+  fallbackReason?: string;
 };
 
 type TemporalAlert = {
@@ -337,6 +329,9 @@ export default function Home() {
   const [chatMode, setChatMode] = useState<"checking" | "ai" | "demo">(
     "checking",
   );
+  const [chatProvider, setChatProvider] = useState<"gemini" | "openai" | null>(
+    null,
+  );
   const [chatNotice, setChatNotice] = useState<ChatNotice | null>(null);
   const [seenConcepts, setSeenConcepts] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -596,6 +591,7 @@ export default function Home() {
 
       const result = (await response.json()) as ChatResponse;
       setChatMode(result.mode);
+      setChatProvider(result.provider ?? null);
       setMessages((current) => [
         ...current,
         { role: "assistant", content: result.reply },
@@ -634,17 +630,22 @@ export default function Home() {
 
       if (result.mode === "demo") {
         const missingKey = result.fallbackReason === "missing_api_key";
-        const rateLimited = result.fallbackReason === "openai_rate_limited";
-        const authError = result.fallbackReason === "openai_auth_error";
+        const rateLimited = result.fallbackReason?.endsWith("_rate_limited");
+        const authError = result.fallbackReason?.endsWith("_auth_error");
+        const failedProvider = result.fallbackReason?.startsWith("gemini_")
+          ? "Gemini"
+          : result.fallbackReason?.startsWith("openai_")
+            ? "OpenAI"
+            : "The live AI provider";
         setChatNotice({
           tone: "offline",
           message: missingKey
             ? "Deterministic demo mode is active; no API connection is required."
             : rateLimited
-              ? "The OpenAI rate limit was reached. A deterministic 1998 reply kept the conversation moving."
+              ? `${failedProvider}'s free-tier rate limit was reached. A deterministic 1998 reply kept the conversation moving.`
               : authError
-                ? "The OpenAI credential could not be used. A deterministic 1998 reply kept the conversation moving."
-                : "OpenAI is temporarily unavailable. A deterministic 1998 reply kept the conversation moving.",
+                ? `${failedProvider} credential could not be used. A deterministic 1998 reply kept the conversation moving.`
+                : `${failedProvider} is temporarily unavailable. A deterministic 1998 reply kept the conversation moving.`,
         });
       }
     } catch {
@@ -712,7 +713,7 @@ export default function Home() {
               </a>
             </div>
             <div className="trust-row">
-              <span>GPT-5.6 characters</span>
+              <span>Live AI + offline characters</span>
               <span>Interactive reconstruction</span>
               <span>Time Integrity Engine</span>
             </div>
@@ -1008,7 +1009,9 @@ export default function Home() {
                       </dl>
                       <span className={`mode-badge ${chatMode}`}>
                         {chatMode === "ai"
-                          ? "GPT-5.6 live"
+                          ? chatProvider === "gemini"
+                            ? "Gemini live"
+                            : "GPT-5.6 live"
                           : chatMode === "demo"
                             ? "Demo fallback"
                             : "Live + demo ready"}
@@ -1198,15 +1201,16 @@ export default function Home() {
                       <p className="win-kicker">OPENAI BUILD WEEK 2026</p>
                       <h2>Chrono turns historical knowledge into an experience.</h2>
                       <p>
-                        GPT-5.6 writes Sam&apos;s historically bounded dialogue through
-                        the server-side Responses API. A deterministic guardrail
-                        classifies temporal contamination and keeps the demo usable
-                        if the API is unavailable. Codex accelerates implementation,
+                        Gemini or GPT-5.6 can write Sam&apos;s historically bounded
+                        dialogue through a server-only provider adapter. A deterministic
+                        guardrail classifies temporal contamination and keeps the demo
+                        usable if live AI is unavailable. Codex accelerates implementation,
                         testing, source integration, and iteration.
                       </p>
                       <ul>
                         <li>One focused, runnable 1998 vertical slice</li>
-                        <li>Server-side OpenAI Responses API integration</li>
+                        <li>Server-side Gemini and OpenAI provider integration</li>
+                        <li>Wayback Machine Archive Lens for real 1998 captures</li>
                         <li>Curated source cards with explicit evidence labels</li>
                         <li>Offline demo mode with the same integrity rules</li>
                         <li>Repeat-aware Time Integrity Engine</li>

@@ -20,6 +20,7 @@ export type TimeIntegrityAssessment = {
 export type ChronoReply = TimeIntegrityAssessment & {
   reply: string;
   mode: ChronoMode;
+  provider?: "gemini" | "openai";
   fallbackReason?: string;
 };
 

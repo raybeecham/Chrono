@@ -4,7 +4,7 @@
 
 - Start from a fresh page load so Timeline Integrity reads 100%.
 - Leave **Sound on** for the synthesized dial tone, number dialing, and carrier handshake; use **Skip connection** if the timer is tight.
-- Have the app running and decide whether the recording will show **GPT-5.6 live** or **Demo fallback**. Both preserve the integrity demo; live mode needs a configured server-side key.
+- Have the app running and decide whether the recording will show **Gemini live**, **GPT-5.6 live**, or **Demo fallback**. All preserve the integrity demo; live mode needs a configured server-side key.
 - Keep the browser large enough to show the desktop icons and integrity meter. Do not open an external source link during the timed run.
 
 ## 0:00–0:15 — Enter the date
@@ -55,9 +55,9 @@
 
 ## 2:25–2:52 — Explain the OpenAI and reliability architecture
 
-**Point to:** The **GPT-5.6 live** or **Demo fallback** badge and the conversation transcript.
+**Point to:** The **Gemini live**, **GPT-5.6 live**, or **Demo fallback** badge and the conversation transcript.
 
-**Say:** “The deterministic server engine owns the three tiers and repeat-safe score. GPT-5.6 gets that assessment and transcript through the Responses API, then returns Sam’s structured period reply; the server verifies both decision and reply safety. Missing or failed API access uses deterministic Sam; transport failures offer nonduplicating Retry; the key stays server-side. Codex accelerated the build, tests, and polish, but is not a runtime dependency.”
+**Say:** “The deterministic server engine owns the three tiers and repeat-safe score. The selected live provider gets that assessment and transcript, then returns Sam’s structured period reply; the server verifies both decision and reply safety. Gemini gives us a free-tier path, GPT-5.6 remains optional, and missing or failed API access uses deterministic Sam. The key stays server-side. Codex accelerated the build, tests, and polish, but is not a runtime dependency.”
 
 ## 2:52–3:00 — Close
 

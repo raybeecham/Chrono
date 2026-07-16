@@ -2,7 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-type WebPageId = "home" | "yahoo" | "geocities" | "ask" | "nasa";
+import {
+  archiveStartingPoints,
+  create1998ArchiveUrl,
+} from "@/lib/wayback-1998";
+
+type WebPageId = "home" | "yahoo" | "geocities" | "ask" | "nasa" | "archive";
 
 const pageAddresses: Record<WebPageId, string> = {
   home: "http://www.chrononet.net/1998",
@@ -10,6 +15,7 @@ const pageAddresses: Record<WebPageId, string> = {
   geocities: "http://www.geocities.com/SiliconValley/Heights/5120/",
   ask: "http://www.askjeeves.com/",
   nasa: "http://www.nasa.gov/shuttle/missions/sts-88/",
+  archive: "chrono://research/archive-lens/1998",
 };
 
 const searchIndex = [
@@ -65,6 +71,8 @@ export function ChronoWeb({
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [guestbookSigned, setGuestbookSigned] = useState(false);
+  const [archiveQuery, setArchiveQuery] = useState("");
+  const [archiveError, setArchiveError] = useState("");
   const browserPageRef = useRef<HTMLDivElement | null>(null);
   const didMountRef = useRef(false);
 
@@ -114,6 +122,18 @@ export function ChronoWeb({
     setQuery(value);
     setSubmittedQuery(value);
     navigate("ask");
+  }
+
+  function handleArchiveSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const archiveUrl = create1998ArchiveUrl(archiveQuery);
+    if (!archiveUrl) {
+      setArchiveError("Enter a valid website address, such as nasa.gov.");
+      return;
+    }
+
+    setArchiveError("");
+    window.open(archiveUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -170,6 +190,9 @@ export function ChronoWeb({
                 </button>
                 <button type="button" className="web-link" onClick={() => navigate("nasa")}>
                   NASA Shuttle Mission — live today
+                </button>
+                <button type="button" className="web-link" onClick={() => navigate("archive")}>
+                  Chrono Archive Lens — real 1998 captures
                 </button>
               </section>
               <section>
@@ -313,6 +336,69 @@ export function ChronoWeb({
               rel="noreferrer"
             >
               Open the NASA mission record ↗
+            </a>
+          </article>
+        )}
+
+        {currentPage === "archive" && (
+          <article className="retro-page archive-lens-page">
+            <p className="archive-lens-layer">
+              CHRONO RESEARCH LAYER · MODERN TOOL · NOT A 1998 APPLICATION
+            </p>
+            <h2>Archive Lens</h2>
+            <p className="archive-lens-intro">
+              Step outside the reconstruction and open real web captures preserved
+              by the Internet Archive&apos;s Wayback Machine. Captures may be incomplete,
+              missing images, or recorded on a nearby date.
+            </p>
+
+            <div className="archive-starting-points">
+              {archiveStartingPoints.map((entry) => (
+                <article key={entry.id}>
+                  <div>
+                    <strong>{entry.site}</strong>
+                    <span>{entry.captureLabel}</span>
+                  </div>
+                  <p>{entry.description}</p>
+                  <code>{entry.originalUrl}</code>
+                  <a href={entry.archiveUrl} target="_blank" rel="noreferrer">
+                    Open in the Wayback Machine ↗
+                  </a>
+                </article>
+              ))}
+            </div>
+
+            <form className="archive-search" onSubmit={handleArchiveSearch}>
+              <label htmlFor="archive-url">Try another website in 1998</label>
+              <div>
+                <input
+                  id="archive-url"
+                  value={archiveQuery}
+                  onChange={(event) => setArchiveQuery(event.target.value)}
+                  placeholder="example.com"
+                  inputMode="url"
+                  maxLength={240}
+                  aria-describedby="archive-help archive-error"
+                />
+                <button type="submit" disabled={!archiveQuery.trim()}>
+                  Browse 1998
+                </button>
+              </div>
+              <small id="archive-help">
+                Opens the Internet Archive in a new tab. Availability varies by site.
+              </small>
+              <span id="archive-error" className="archive-error" role="alert">
+                {archiveError}
+              </span>
+            </form>
+
+            <a
+              className="archive-about-link"
+              href="https://archivesupport.zendesk.com/hc/en-us/articles/360004651732-Using-The-Wayback-Machine"
+              target="_blank"
+              rel="noreferrer"
+            >
+              How the Wayback Machine works ↗
             </a>
           </article>
         )}

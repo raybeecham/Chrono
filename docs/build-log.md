@@ -176,3 +176,27 @@ Use this file to preserve evidence for the Devpost submission. Add an entry afte
 - Desktop and 375 × 812 mobile checks found no horizontal overflow. Mobile-specific single-column Inbox and Buddy List layouts, compact icon grid, fixed taskbar, scrollable mission panel, and viewport-fixed screensaver were verified.
 
 **Remaining risk:** These additions deliberately favor a dense, playful desktop. On small screens the app grid uses two rows (three after the secret is unlocked), and longer app content scrolls inside its window. Mission and Easter-egg state remain session-local and reset on reload.
+
+## 2026-07-15: Archive Lens and free-tier live character path
+
+**Goal:** Connect Chrono’s reconstruction to surviving web captures and provide a useful live character option when the OpenAI account has no API quota.
+
+**Decision:** Added the Wayback Machine as an explicitly modern research layer rather than placing it inside the fictional 1998 world. Added Gemini as a server-only provider with explicit selection; `gemini` and `openai` modes never silently fall through to one another, while `auto` prefers Gemini. The deterministic engine remains authoritative and is always the final fallback.
+
+**Implemented:**
+
+- Added an Archive Lens page to ChronoNet with four curated starting points, one exact verified Yahoo! capture from February 10, 1998, a validated arbitrary-URL explorer, third-party attribution, and capture-completeness warnings.
+- Avoided a runtime dependency on the Internet Archive API; the archive index was slow during validation, while direct links keep Chrono responsive and its local reconstruction available.
+- Added Gemini REST generation with JSON Schema output, bounded transcripts, a 20-second timeout, provider-specific failure classification, server-side key handling, deterministic assessment matching, and the existing period-safety guard.
+- Added explicit provider selection and documented the no-billing-required Gemini free tier, its rate limits, and its free-tier data-use tradeoff.
+- Added focused tests for provider choice and Archive Lens URL validation without adding a production dependency.
+
+**Validation:**
+
+- `npm test`: 29 tests passed, including four provider-selection checks and three Archive Lens URL checks.
+- `npm run lint`: passed.
+- TypeScript no-emit check: passed.
+- `npm run build`: passed; the static experience and dynamic chat route compiled successfully.
+- Secret handling review confirmed both provider credentials are read only inside the server route, `.env.local` remains gitignored, and no credential value appears in the patch.
+
+**Remaining risk:** Wayback captures are externally hosted and may be incomplete or unavailable. Gemini free-tier capacity and model availability can change, and Google states free-tier content may be used to improve its products. Deterministic Sam preserves the core demo in both cases.

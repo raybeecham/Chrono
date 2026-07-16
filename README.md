@@ -14,12 +14,13 @@ The signature mechanic is the **Time Integrity Engine**. Period-appropriate ques
 - An interactive Time Capsule with **8 categories, 20 facts, and 10 curated sources**.
 - Explicit **Documented**, **Representative**, and **Fictional** grounding labels, confidence labels, expandable fact cards, and a source drawer.
 - A navigable ChronoNet reconstruction with a directory, Yahoo!-style index, Sam’s fictional GeoCities page, a representative Ask Jeeves search, and a documented NASA STS-88 page.
+- A clearly separated **Archive Lens** that opens real 1998 captures in the Internet Archive’s Wayback Machine, including a verified Yahoo! capture and a safe URL explorer.
 - A playable **Snake '98** desktop game with keyboard, touch, pause, scoring, increasing speed, and session-best tracking.
 - A five-step **First Night in 1998** guided mission that tracks real exploration and awards a session certificate.
 - An **Inbox ’98** reconstruction with five labeled messages and a fictional instant-messenger buddy list.
 - **ChronoAmp**, an original browser-synthesized tracker player with three copyright-safe loops.
 - A flying-clocks screen saver, clickable-clock secret, classic keyboard-code Easter egg, and unlockable Developer Vault.
-- A session-aware conversation with Sam, powered by GPT-5.6 when configured and by a deterministic local reply system otherwise.
+- A session-aware conversation with Sam, powered by Gemini’s free tier or GPT-5.6 when configured and by a deterministic local reply system otherwise.
 - A three-tier integrity engine—**harmless**, **probable**, and **definite**—with canonical concept IDs and repeat protection.
 - Visible loading, initial readiness, live/demo mode, fallback, contamination, and retry states.
 
@@ -29,7 +30,7 @@ Chrono is a historical reconstruction. Source-backed context is separated from r
 
 1. Turn sound on, select **Enter December 1998**, and let the temporal modem connect. ChronoClip appears with a welcome tip on the desktop.
 2. Open **Time Capsule**. Expand **Endeavour leaves Earth**, select **View 1 source**, and show the NASA source card. Close the drawer, then select **Games** to show the Documented, Representative, and Fictional labels together.
-3. Open **The Internet**, then select **NASA Shuttle Mission — live today** to show a documented ChronoNet page.
+3. Open **The Internet**, select **NASA Shuttle Mission — live today**, then open **Chrono Archive Lens** to compare the reconstruction with real Wayback Machine captures.
 4. Open **Snake '98**, select **Start**, and make a few moves with the arrow keys or on-screen direction pad.
 5. Open **Time Missions** to see the actions already recorded, then explore **Inbox ’98**, **ChronoAmp**, or the **Buddy List**.
 6. Open **Talk to Sam** and ask `What websites do you use?`
@@ -44,7 +45,7 @@ For presenter narration and timing, use the [three-minute demo script](docs/demo
 
 - Node.js 22 or newer
 - npm
-- An OpenAI API key only if you want live GPT-5.6 replies
+- A Gemini API key only if you want free-tier live replies; no key is needed for deterministic mode
 
 ### Install and start
 
@@ -57,7 +58,7 @@ npm run dev
 
 Open `http://localhost:3000`. No API key is required: Chrono starts with the complete deterministic demo path available.
 
-### Optional live GPT-5.6 mode
+### Optional live Gemini mode (free tier)
 
 Copy the example environment file:
 
@@ -71,14 +72,29 @@ Copy-Item .env.example .env.local
 cp .env.example .env.local
 ```
 
-Then set the server-side values in `.env.local`:
+Create a key in Google AI Studio, then set these server-side values in `.env.local`:
 
 ```bash
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-3.5-flash
+```
+
+Restart the development server after changing environment variables. `.env.local` is gitignored. The browser sends conversation state only to Chrono’s own `/api/chat` route; the route reads `GEMINI_API_KEY` on the server and calls the Gemini API. The key is never included in client code or browser requests.
+
+Gemini’s supported models can be used without enabling billing on the Free Tier, subject to per-project rate limits. Google states that free-tier API content may be used to improve its products, so do not send secrets or sensitive personal information through Sam’s chat. Chrono sends only the bounded conversation transcript and character instructions.
+
+### Optional GPT-5.6 mode
+
+OpenAI remains available as an explicit alternative:
+
+```bash
+AI_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-5.6
 ```
 
-Restart the development server after changing environment variables. `.env.local` is gitignored. The browser sends conversation state only to Chrono’s own `/api/chat` route; the route reads `OPENAI_API_KEY` on the server and calls the OpenAI Responses API. The key is never included in client code or browser requests.
+Provider selection is deliberate: `AI_PROVIDER=gemini` never silently falls through to OpenAI, and `AI_PROVIDER=openai` never silently falls through to Gemini. `AI_PROVIDER=auto` prefers Gemini when both keys are present. Any missing, exhausted, or unavailable provider falls back to deterministic Sam.
 
 ## Validate
 
@@ -88,7 +104,7 @@ npm run lint
 npm run build
 ```
 
-`npm test` uses Node 22’s built-in test runner. The automated suite covers period-appropriate language, obvious and subtle contamination, ambiguous terms, alias grouping, repeat accounting, deterministic no-key replies, Sam’s transcript continuity, and the period-safety guard.
+`npm test` uses Node 22’s built-in test runner. The automated suite covers period-appropriate language, obvious and subtle contamination, ambiguous terms, alias grouping, repeat accounting, deterministic no-key replies, Sam’s transcript continuity, provider selection, Archive Lens URL safety, and the period-safety guard.
 
 ## Historical grounding
 
@@ -98,18 +114,20 @@ npm run build
 
 For documented and representative facts, **High confidence** denotes clear, dated support and **Medium confidence** denotes a careful but interpretive synthesis. Fictional cards instead say **Not a factual claim**. A fact’s **View source** control narrows the drawer to its supporting record, while the category **Sources** control shows every reference used in that section. Source cards identify the organization, date, title, summary, and external publisher or archive link.
 
+The **Archive Lens** is deliberately labeled as a modern Chrono research layer rather than a 1998 application. Its links open the Internet Archive in a new tab. Archived sites may be incomplete, omit images or scripts, redirect to a nearby capture, or have no surviving capture at all; Chrono’s local reconstruction remains available regardless.
+
 ## Reliability behavior
 
 - **No key:** the server returns a useful deterministic Sam reply with the same integrity metadata and the interface displays **Demo fallback**.
-- **OpenAI unavailable:** authentication, rate-limit, timeout, incomplete, invalid, mismatched, or period-unsafe model results fall back to the deterministic reply instead of breaking the conversation.
+- **Live provider unavailable:** Gemini or OpenAI authentication, rate-limit, timeout, incomplete, invalid, mismatched, or period-unsafe results fall back to the deterministic reply instead of breaking the conversation.
 - **Browser-to-server failure:** the user’s message stays in the transcript and a **Retry** control resends it without adding a duplicate user message.
 - **Repeat protection:** canonical IDs group related terms such as iPhone and Android phone. A repeated concept is flagged with a zero delta; if the same message introduces a different new concept, that new concept can still reduce integrity.
 
-OpenAI failures do not show Retry because the server has already returned a successful deterministic reply. Retry is a deliberate user action shown only when the browser cannot complete its request to Chrono’s route; requests are not replayed automatically. Fallback replies are intentionally more constrained than live GPT-5.6 conversation, but the historical boundary and the signature integrity demo remain available.
+Provider failures do not show Retry because the server has already returned a successful deterministic reply. Retry is a deliberate user action shown only when the browser cannot complete its request to Chrono’s route; requests are not replayed automatically. Fallback replies are intentionally more constrained than live conversation, but the historical boundary and the signature integrity demo remain available.
 
-## How GPT-5.6 and Codex are used
+## How live AI and Codex are used
 
-**GPT-5.6 is the runtime character layer.** The server first classifies the latest user message with Chrono’s deterministic Time Integrity Engine. It then sends the bounded transcript, Sam’s December 4, 1998 instructions, and that authoritative assessment to the OpenAI Responses API. GPT-5.6 returns strict structured output containing Sam’s natural-language reply and the assessment fields it was given. The server verifies the classification, delta, concept, and repeat fields, applies a period-safety guard to the reply, and returns its own authoritative assessment; otherwise it uses the deterministic fallback.
+**Gemini or GPT-5.6 can be the runtime character layer.** The server first classifies the latest user message with Chrono’s deterministic Time Integrity Engine. It then sends the bounded transcript, Sam’s December 4, 1998 instructions, and that authoritative assessment to the selected server-side provider. The model returns strict structured output containing Sam’s natural-language reply and the assessment fields it was given. The server verifies the classification, delta, concept, and repeat fields, applies a period-safety guard to the reply, and returns its own authoritative assessment; otherwise it uses the deterministic fallback.
 
 **Codex is the development collaborator, not a runtime dependency.** It was used to audit the existing prototype, implement and test the historical grounding and integrity systems, preserve Sam’s continuity, improve reliability and accessibility, and maintain the build log and demo documentation. The resulting application runs as one standard Next.js project without requiring Codex.
 
@@ -121,20 +139,21 @@ Browser
         ├── Landing, synthesized dial-up transition, and 1998 desktop
         ├── Context-aware fictional ChronoClip helper
         ├── Static curated history and ChronoNet reconstruction
+        ├── Modern Archive Lens linking to real Wayback captures
         ├── Dependency-free Snake '98 game
         ├── Action-tracked guided mission and session certificate
         ├── Fictional mail, buddy list, media player, and system extras
         ├── Time Integrity Engine state and warnings
         └── POST /api/chat
               ├── Deterministic authoritative integrity assessment
-              ├── OpenAI Responses API / GPT-5.6 (when configured)
+              ├── Gemini free tier or OpenAI Responses API (when configured)
               ├── Structured-output and period-safety verification
               └── Deterministic Sam fallback
 ```
 
 ## Deliberate scope and limitations
 
-Chrono focuses on one polished era and one fictional character. Historical sources are a static curated set rather than a retrieval system, conversation memory lasts only for the current browser session, and the integrity detector covers a tested catalog of future concepts rather than every possible anachronism. Live responses also depend on API access and can vary within the server’s constraints.
+Chrono focuses on one polished era and one fictional character. Historical sources are a static curated set rather than a retrieval system, conversation memory lasts only for the current browser session, and the integrity detector covers a tested catalog of future concepts rather than every possible anachronism. Live responses depend on provider access and can vary within the server’s constraints. Wayback pages are third-party captures whose availability and completeness Chrono cannot guarantee.
 
 See [the MVP brief](docs/mvp.md), [the Codex build log](docs/build-log.md), and [the demo script](docs/demo-script.md).
 
