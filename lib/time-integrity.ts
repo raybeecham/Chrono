@@ -505,6 +505,27 @@ function shortenedQuote(value: string): string {
   return compact.length > 72 ? `${compact.slice(0, 69)}…` : compact;
 }
 
+function asksAboutAchievements(value: string): boolean {
+  return /\b(?:notable|noteable|major|important)?\s*(?:achievement|achievements|accomplishment|accomplishments|breakthrough|breakthroughs|milestone|milestones)\b/i.test(
+    value,
+  );
+}
+
+const achievementTopicPatterns = [
+  { id: "iss", pattern: /\b(?:ISS|International Space Station|STS-88|Endeavour|Zarya|Unity)\b/i },
+  { id: "web", pattern: /\b(?:World Wide Web|the web|internet)\b/i },
+  { id: "pathfinder", pattern: /\bMars Pathfinder\b/i },
+  { id: "deep-blue", pattern: /\b(?:Deep Blue|Kasparov)\b/i },
+  { id: "dolly", pattern: /\b(?:Dolly|clon(?:e|ed|ing))\b/i },
+  { id: "genome", pattern: /\bHuman Genome Project\b/i },
+] as const;
+
+function achievementTopics(value: string): string[] {
+  return achievementTopicPatterns
+    .filter(({ pattern }) => pattern.test(value))
+    .map(({ id }) => id);
+}
+
 function samFallbackReply(
   messages: readonly ChronoChatMessage[],
   assessment: TimeIntegrityAssessment,
@@ -561,6 +582,26 @@ function samFallbackReply(
 
   if (/\b(?:hey|hello|hi there|what's up|whats up)\b/i.test(normalized)) {
     return "Hey. I'm mostly avoiding homework and waiting to see if my friends are going to the mall later. What's up?";
+  }
+
+  if (/\bcobol\b/i.test(normalized)) {
+    return "Yeah—COBOL is an older language used for big business and mainframe systems, especially banking and government records. It keeps coming up in Y2K coverage because a lot of those long-running programs need their date handling checked.";
+  }
+
+  if (
+    /\b(?:(?:coding|programming) languages?|language should i learn|languages? (?:are|is) fun to learn)\b/i.test(
+      normalized,
+    )
+  ) {
+    return "JavaScript is probably the most fun if you want to make a homepage do something, and Java is still new enough to feel like a big deal for applets and programs. Python exists and looks readable, but I see Java, JavaScript, C, and C++ mentioned a lot more.";
+  }
+
+  if (asksAboutAchievements(input)) {
+    if (previousUserMessage && asksAboutAchievements(previousUserMessage.content)) {
+      return "A few more: Mars Pathfinder put a rover on Mars last year, IBM's Deep Blue beat Kasparov, and scientists cloned Dolly the sheep. Those all felt like science-fiction headlines becoming real.";
+    }
+
+    return "Zarya, the first ISS module, is already in orbit, and Endeavour launched this morning carrying Unity for the planned connection. The Web becoming something schools and businesses actually use, plus the Human Genome Project mapping human DNA at a huge scale, also feel like major achievements.";
   }
 
   if (/\bgame of thrones\b/i.test(normalized)) {
@@ -685,6 +726,62 @@ export function isHistoricallyCalibratedReply(
     return /\b(?:research|experiment|laborator|scientist|physics|heard (?:of )?(?:the )?(?:term|idea))\b/i.test(
       reply,
     );
+  }
+
+  if (/\bcobol\b/i.test(latestInput)) {
+    if (
+      /\b(?:my dad|my father|ancient code|dead language|obsolete|huge headache)\b/i.test(
+        reply,
+      )
+    ) {
+      return false;
+    }
+
+    return /\b(?:business|mainframe|bank|financial|government|Y2K|year 2000|established|older)\b/i.test(
+      reply,
+    );
+  }
+
+  if (
+    /\b(?:(?:coding|programming) languages?|language should i learn|languages? (?:are|is) fun to learn)\b/i.test(
+      latestInput,
+    )
+  ) {
+    if (
+      /\bC\+\+[^.!?]{0,80}\b(?:new|newer|brand-new)\b/i.test(reply) ||
+      /\b(?:gold standard|actually playable on my rig|I've been (?:messing|working|playing|learning|using)|I have been (?:messing|working|playing|learning|using))\b/i.test(
+        reply,
+      )
+    ) {
+      return false;
+    }
+
+    return /\bJava(?:Script)?\b/i.test(reply);
+  }
+
+  if (asksAboutAchievements(latestInput)) {
+    if (
+      /\bY2K\b/i.test(reply) ||
+      /\b(?:space station|ISS) (?:construction )?(?:has )?finally (?:started|starting|gone up|went up|going up)\b/i.test(
+        reply,
+      ) ||
+      /\bUnity\b[^.!?]{0,60}\b(?:joined|connected|mated)\b/i.test(reply)
+    ) {
+      return false;
+    }
+
+    const currentTopics = achievementTopics(reply);
+    if (currentTopics.length < 2) return false;
+
+    if (previousUserMessage && asksAboutAchievements(previousUserMessage.content)) {
+      const previousAssistant = [...messages.slice(0, latestIndex)]
+        .reverse()
+        .find((message) => message.role === "assistant");
+      const previousTopics = new Set(
+        achievementTopics(previousAssistant?.content ?? ""),
+      );
+      return currentTopics.some((topic) => !previousTopics.has(topic));
+    }
   }
 
   return true;

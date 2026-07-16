@@ -224,3 +224,27 @@ Use this file to preserve evidence for the Devpost submission. Add an entry afte
 - Live Gemini replay of the six supplied prompts kept all historical distinctions and conversational context intact. Calibration-rejected ChatGPT and iPhone guesses safely used neutral deterministic responses.
 
 **Remaining risk:** An open-ended fictional character can still vary stylistically. The guard targets factual and conversational failure modes rather than forcing every response into one script, and the deterministic fallback remains intentionally concise.
+
+## 2026-07-16: Technical knowledge and achievement specificity
+
+**Goal:** Stop Sam from inventing family anecdotes or personal coding experience, treating established languages as new, using Y2K anxiety as an achievement, and describing later STS-88 mission events as already complete.
+
+**Decision:** Added a small set of date-specific technical anchors and reusable achievement-topic checks. Broad achievement answers must name multiple concrete examples, respect the exact December 4 mission state, and introduce at least one new topic when the traveler asks again.
+
+**Implemented:**
+
+- Calibrated COBOL as an established business/mainframe language relevant to Y2K remediation without calling it dead, ancient, or something Sam knows through an invented relative.
+- Distinguished established C++ and 1991-era Python from the newer Java and JavaScript options a 1998 teenager could plausibly recommend.
+- Prevented technical recommendations from inventing personal projects or experience not established in the transcript.
+- Anchored STS-88 to the selected date: Zarya is already in orbit and Endeavour launched Unity on December 4, but their orbital mating remains in the future.
+- Added concrete, additive achievement sets spanning the early ISS, the Web, Human Genome Project, Mars Pathfinder, Deep Blue, and Dolly.
+- Added regression tests based directly on the four reported prompts and their repeated-achievement flow.
+
+**Validation:**
+
+- `npm test`: 37 tests passed.
+- `npm run lint`: passed.
+- TypeScript no-emit check: passed.
+- Live Gemini replay returned grounded COBOL and Java/JavaScript answers; both achievement prompts used safe deterministic responses with distinct named examples.
+
+**Remaining risk:** Sam's broad historical answers remain a curated conversational sample rather than an exhaustive history of the 1990s. The source-backed Time Capsule remains the authoritative path for deeper factual detail.

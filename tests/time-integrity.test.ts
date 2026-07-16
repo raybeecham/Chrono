@@ -244,6 +244,50 @@ test("deterministic Sam treats quantum computing as real niche 1998 research", (
   assert.doesNotMatch(response.reply, /not anything real|just sci-fi/i);
 });
 
+test("deterministic Sam answers programming questions without invented biography", () => {
+  const cobol = createDeterministicChronoReply(
+    [{ role: "user", content: "Have you heard of COBOL?" }],
+    "missing_api_key",
+  );
+  assert.equal(cobol.classification, "harmless");
+  assert.match(cobol.reply, /business|mainframe/i);
+  assert.match(cobol.reply, /Y2K|date handling/i);
+  assert.doesNotMatch(cobol.reply, /my dad|ancient code|huge headache/i);
+
+  const languages = createDeterministicChronoReply(
+    [{ role: "user", content: "What new coding languages are fun to learn?" }],
+    "missing_api_key",
+  );
+  assert.match(languages.reply, /JavaScript/);
+  assert.match(languages.reply, /\bJava\b/);
+  assert.doesNotMatch(languages.reply, /C\+\+.*(?:new|gold standard)/i);
+});
+
+test("deterministic achievement answers are concrete, date-safe, and additive", () => {
+  const first = createDeterministicChronoReply(
+    [{ role: "user", content: "What are some notable achievements in this era?" }],
+    "missing_api_key",
+  );
+  assert.match(first.reply, /Zarya/);
+  assert.match(first.reply, /Endeavour.*Unity|Unity.*planned connection/i);
+  assert.match(first.reply, /Web|Human Genome Project/i);
+  assert.doesNotMatch(first.reply, /Y2K/);
+  assert.doesNotMatch(first.reply, /Unity.*(?:joined|connected|mated)/i);
+
+  const second = createDeterministicChronoReply(
+    [
+      { role: "user", content: "What are some notable achievements in this era?" },
+      { role: "assistant", content: first.reply },
+      { role: "user", content: "Can you name some achievements in this era?" },
+    ],
+    "missing_api_key",
+  );
+  assert.match(second.reply, /Mars Pathfinder/);
+  assert.match(second.reply, /Deep Blue/);
+  assert.match(second.reply, /Dolly/);
+  assert.doesNotMatch(second.reply, /Zarya|Unity|Y2K/);
+});
+
 test("dialogue calibration rejects invented guesses and historical denials", () => {
   const chatGptMessages = [
     { role: "user" as const, content: "Have you heard of ChatGPT?" },
@@ -311,6 +355,82 @@ test("dialogue calibration rejects invented guesses and historical denials", () 
       "I've heard the term in connection with experimental physics research.",
       quantumMessages,
       assessConversation(quantumMessages),
+    ),
+    true,
+  );
+});
+
+test("dialogue calibration rejects the reported programming and achievement errors", () => {
+  const cobolMessages = [
+    { role: "user" as const, content: "Have you heard of COBOL?" },
+  ];
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "Yeah, that's that old programming language my dad talks about—ancient code and a huge headache.",
+      cobolMessages,
+      assessConversation(cobolMessages),
+    ),
+    false,
+  );
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "It's an older business language used on mainframes, and Y2K work has people checking those systems.",
+      cobolMessages,
+      assessConversation(cobolMessages),
+    ),
+    true,
+  );
+
+  const languageMessages = [
+    {
+      role: "user" as const,
+      content: "What new coding languages are fun to learn?",
+    },
+  ];
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "C++ is basically the gold standard, and it helps me build something actually playable on my rig.",
+      languageMessages,
+      assessConversation(languageMessages),
+    ),
+    false,
+  );
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "I've been messing around with Java and JavaScript to build interactive applets.",
+      languageMessages,
+      assessConversation(languageMessages),
+    ),
+    false,
+  );
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "JavaScript is fun for interactive web pages, while Java is useful for applets and programs.",
+      languageMessages,
+      assessConversation(languageMessages),
+    ),
+    true,
+  );
+
+  const achievementMessages = [
+    {
+      role: "user" as const,
+      content: "What are some notable achievements in this era?",
+    },
+  ];
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "ISS construction is finally starting in orbit, the web is everywhere, and we're waiting to see whether Y2K shuts down the world.",
+      achievementMessages,
+      assessConversation(achievementMessages),
+    ),
+    false,
+  );
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "Zarya is in orbit and Endeavour launched Unity today; the Web and Human Genome Project are also moving fast.",
+      achievementMessages,
+      assessConversation(achievementMessages),
     ),
     true,
   );
