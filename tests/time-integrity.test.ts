@@ -7,6 +7,7 @@ const {
   assessTimeIntegrity,
   createDeterministicChronoReply,
   extractConceptIds,
+  isHistoricallyCalibratedReply,
   isPeriodSafeReply,
 } = (await import(moduleUrl.href)) as typeof import("../lib/time-integrity");
 
@@ -18,6 +19,8 @@ test("period-appropriate prompts remain harmless", () => {
     "Does your GPS receiver work?",
     "Google has a really simple search page.",
     "Do you listen to CDs or cassette tapes?",
+    "Have you heard of Game of Thrones?",
+    "Have you heard of quantum computers?",
   ];
 
   prompts.forEach((prompt) => {
@@ -28,6 +31,18 @@ test("period-appropriate prompts remain harmless", () => {
     assert.equal(result.conceptId, "", prompt);
     assert.equal(result.isRepeat, false, prompt);
   });
+});
+
+test("future-dated claims are contamination without flagging ordinary future questions", () => {
+  const claim = assessTimeIntegrity("It's a new show in 2019.");
+  assert.equal(claim.classification, "definite");
+  assert.equal(claim.conceptId, "future-dated-claim");
+
+  assert.equal(
+    assessTimeIntegrity("What do you think computers will be like in 2019?")
+      .classification,
+    "harmless",
+  );
 });
 
 test("obvious future knowledge is definite contamination", () => {
@@ -158,9 +173,25 @@ test("no-key deterministic fallback returns every integrity field and a useful r
   assert.equal(response.conceptId, "modern-smartphones");
   assert.equal(response.isRepeat, false);
   assert.ok(response.reply.length > 20);
-  assert.match(response.reply, /what is|don't know/i);
+  assert.match(response.reply, /what is|don't know|don't recognize/i);
   assert.equal(Object.hasOwn(response, "explanation"), true);
   assert.equal(Object.hasOwn(response, "anachronism"), true);
+});
+
+test("future-term fallbacks use the traveler's wording instead of engine labels", () => {
+  const chatGpt = createDeterministicChronoReply(
+    [{ role: "user", content: "Have you heard of ChatGPT?" }],
+    "dialogue_calibration_rejected",
+  );
+  assert.match(chatGpt.reply, /ChatGPT/i);
+  assert.doesNotMatch(chatGpt.reply, /modern generative AI/i);
+
+  const iphone = createDeterministicChronoReply(
+    [{ role: "user", content: "Have you heard of the iPhone?" }],
+    "dialogue_calibration_rejected",
+  );
+  assert.match(iphone.reply, /iPhone/i);
+  assert.doesNotMatch(iphone.reply, /modern smartphone/i);
 });
 
 test("deterministic Sam remembers the session transcript", () => {
@@ -175,6 +206,114 @@ test("deterministic Sam remembers the session transcript", () => {
 
   assert.match(response.reply, /What game should I buy\?/);
   assert.equal(response.classification, "harmless");
+});
+
+test("deterministic Sam distinguishes a 1996 novel from its future adaptation", () => {
+  const book = createDeterministicChronoReply(
+    [{ role: "user", content: "Have you heard of Game of Thrones?" }],
+    "missing_api_key",
+  );
+  assert.equal(book.classification, "harmless");
+  assert.match(book.reply, /fantasy novel|George R\. R\. Martin/i);
+  assert.doesNotMatch(book.reply, /new RPG|console/i);
+
+  const futureShow = createDeterministicChronoReply(
+    [
+      { role: "user", content: "Have you heard of Game of Thrones?" },
+      {
+        role: "assistant",
+        content: "I've heard of the fantasy novel, but I haven't read it.",
+      },
+      { role: "user", content: "It's a new show in 2019." },
+    ],
+    "missing_api_key",
+  );
+  assert.equal(futureShow.conceptId, "future-dated-claim");
+  assert.match(futureShow.reply, /show in 2019|more than twenty years|future/i);
+  assert.match(futureShow.reply, /fantasy novel/i);
+});
+
+test("deterministic Sam treats quantum computing as real niche 1998 research", () => {
+  const response = createDeterministicChronoReply(
+    [{ role: "user", content: "Have you heard of quantum computers?" }],
+    "missing_api_key",
+  );
+
+  assert.equal(response.classification, "harmless");
+  assert.match(response.reply, /experimental|research|lab/i);
+  assert.doesNotMatch(response.reply, /not anything real|just sci-fi/i);
+});
+
+test("dialogue calibration rejects invented guesses and historical denials", () => {
+  const chatGptMessages = [
+    { role: "user" as const, content: "Have you heard of ChatGPT?" },
+  ];
+  const chatGptAssessment = assessConversation(chatGptMessages);
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "ChatGPT? Sounds like some kind of secret government project.",
+      chatGptMessages,
+      chatGptAssessment,
+    ),
+    false,
+  );
+
+  const bookMessages = [
+    { role: "user" as const, content: "Have you heard of Game of Thrones?" },
+  ];
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "Sounds like a medieval strategy game or a new RPG.",
+      bookMessages,
+      assessConversation(bookMessages),
+    ),
+    false,
+  );
+
+  const adaptationMessages = [
+    { role: "user" as const, content: "Have you heard of Game of Thrones?" },
+    {
+      role: "assistant" as const,
+      content: "Yeah, that's the George R. R. Martin fantasy novel.",
+    },
+    { role: "user" as const, content: "It's a new show in 2019." },
+  ];
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "2019? That's way into the future, so I have no clue.",
+      adaptationMessages,
+      assessConversation(adaptationMessages),
+    ),
+    false,
+  );
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "A show in 2019? I only know Game of Thrones as a fantasy novel.",
+      adaptationMessages,
+      assessConversation(adaptationMessages),
+    ),
+    true,
+  );
+
+  const quantumMessages = [
+    { role: "user" as const, content: "Have you heard of quantum computers?" },
+  ];
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "That is wild sci-fi stuff, not anything real.",
+      quantumMessages,
+      assessConversation(quantumMessages),
+    ),
+    false,
+  );
+  assert.equal(
+    isHistoricallyCalibratedReply(
+      "I've heard the term in connection with experimental physics research.",
+      quantumMessages,
+      assessConversation(quantumMessages),
+    ),
+    true,
+  );
 });
 
 test("period guard rejects future explanations and unrelated future concepts", () => {

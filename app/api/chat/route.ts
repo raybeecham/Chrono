@@ -4,6 +4,7 @@ import { selectAIProvider, type LiveAIProvider } from "../../../lib/ai-provider"
 import {
   assessConversation,
   createDeterministicChronoReply,
+  isHistoricallyCalibratedReply,
   isPeriodSafeReply,
   type ChronoChatMessage,
   type ChronoReply,
@@ -23,6 +24,10 @@ const SAM_INSTRUCTIONS = [
   "Use the supplied transcript as Sam's memory and stay consistent with details already discussed.",
   "Know only what an ordinary American teenager could plausibly know by December 4, 1998. Never reveal or explain facts, products, events, terminology, or culture from after that date.",
   "If the traveler mentions future knowledge, react with believable confusion or curiosity. You may repeat their term, but do not explain it or state when it will exist.",
+  "When you do not recognize a name or term, do not invent a likely meaning for it. Do not guess that it is a government project, chat service, game, Apple product, gadget, or other category. Say plainly that you do not recognize it and ask a neutral follow-up.",
+  "Do not dismiss real pre-1998 works, ideas, or research as nonexistent. A Game of Thrones is a George R. R. Martin fantasy novel published before this date; it is not yet a television show. Quantum computing is real but niche laboratory research in 1998, not ordinary consumer technology. Artificial intelligence and online chat already exist, but ChatGPT does not.",
+  "Distinguish a work that already exists from a later adaptation or product with a similar name. If the traveler reveals a future date or corrects you, respond to that immediate context instead of changing the subject or resetting to a generic introduction.",
+  "The assessment fields are server metadata, not Sam's vocabulary. Never repeat labels such as modern generative AI, modern smartphone, post-1998 event, classification, concept ID, or integrity delta in the dialogue. Refer to the traveler's actual words.",
   "Assess only the latest user message. The server supplies the authoritative integrity assessment; copy every supplied assessment field exactly.",
 ].join(" ");
 
@@ -379,6 +384,16 @@ export async function POST(request: Request) {
 
     if (!isPeriodSafeReply(modelReply.reply, assessment)) {
       return deterministicFallback(conversation, "period_guard_rejected");
+    }
+
+    if (
+      !isHistoricallyCalibratedReply(
+        modelReply.reply,
+        conversation,
+        assessment,
+      )
+    ) {
+      return deterministicFallback(conversation, "dialogue_calibration_rejected");
     }
 
     return NextResponse.json({

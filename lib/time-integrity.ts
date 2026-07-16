@@ -151,6 +151,19 @@ const conceptRules: readonly ConceptRule[] = [
     ],
   },
   {
+    id: "future-dated-claim",
+    classification: "definite",
+    integrityDelta: -7,
+    anachronism: "post-1998 event stated as established fact",
+    explanation:
+      "The message presents something from after December 4, 1998 as already established.",
+    patterns: [
+      /\b(?:it(?:'s| is)|that(?:'s| is)|this(?:'s| is))\b[^.!?]{0,80}\b(?:in|from) (?:1999|20\d{2})\b/i,
+      /\b(?:came out|premiered|released|launched|started|happened|aired|was new)\b[^.!?]{0,80}\b(?:1999|20\d{2})\b/i,
+      /\b(?:in|from) (?:1999|20\d{2})\b[^.!?]{0,80}\b(?:show|movie|game|product|service|event|album|book)\b/i,
+    ],
+  },
+  {
     id: "covid-19",
     classification: "definite",
     integrityDelta: -12,
@@ -502,17 +515,33 @@ function samFallbackReply(
   const previousUserMessage = [...messages.slice(0, latestIndex)]
     .reverse()
     .find((message) => message.role === "user");
+  const travelerTerm =
+    input.match(/\bchat ?gpt\b/i)?.[0] ??
+    input.match(/\b(?:iPhone|Android phone)\b/i)?.[0] ??
+    assessment.anachronism;
 
   if (assessment.contamination) {
+    if (
+      assessment.conceptId === "future-dated-claim" &&
+      previousUserMessage &&
+      /\bgame of thrones\b/i.test(previousUserMessage.content)
+    ) {
+      return "A show in 2019? That's more than twenty years away. I only know A Game of Thrones as a fantasy novel—you're talking like something from the future already happened.";
+    }
+
     if (assessment.isRepeat) {
-      return `I still don't know what ${assessment.anachronism} is. You mentioned it before, and it still sounds made up.`;
+      return `I still don't recognize ${travelerTerm}. You mentioned it before, but I need you to explain what you mean without assuming I know it.`;
     }
 
     if (assessment.classification === "probable") {
-      return `I'm not sure what you mean by ${assessment.anachronism}. Maybe that's some computer-magazine thing I missed?`;
+      return `I don't recognize the phrase ${travelerTerm}. What exactly do you mean by it?`;
     }
 
-    return `Wait—what is ${assessment.anachronism}? Is that some kind of computer thing? You sound like you're making it up.`;
+    if (assessment.conceptId === "future-dated-claim") {
+      return "That date is way ahead of 1998, but you're describing it like it already happened. What are you talking about?";
+    }
+
+    return `I don't recognize ${travelerTerm}. You're talking like it's something I should already know—what exactly do you mean?`;
   }
 
   if (
@@ -528,6 +557,18 @@ function samFallbackReply(
 
   if (/\b(?:date|what day|today|when is it)\b/i.test(normalized)) {
     return "It's Friday, December 4, 1998 here in Austin. The weekend is close, which is about all I'm thinking about right now.";
+  }
+
+  if (/\b(?:hey|hello|hi there|what's up|whats up)\b/i.test(normalized)) {
+    return "Hey. I'm mostly avoiding homework and waiting to see if my friends are going to the mall later. What's up?";
+  }
+
+  if (/\bgame of thrones\b/i.test(normalized)) {
+    return "I've heard of the fantasy novel by George R. R. Martin, but I haven't read it. Is it actually good, or is it one of those books everyone says they'll finish someday?";
+  }
+
+  if (/\bquantum comput(?:er|ers|ing)\b/i.test(normalized)) {
+    return "I've heard the term, but only as really experimental physics-and-computer-science stuff. It sounds like something researchers can barely make work in a lab, not a computer anybody could actually buy.";
   }
 
   if (/\b(?:website|web site|internet|online|search engine)\b/i.test(normalized)) {
@@ -600,4 +641,51 @@ export function isPeriodSafeReply(
   return replyConceptIds.every(
     (conceptId) => assessment.contamination && conceptId === assessment.conceptId,
   );
+}
+
+export function isHistoricallyCalibratedReply(
+  reply: string,
+  messages: readonly ChronoChatMessage[],
+  assessment: TimeIntegrityAssessment,
+): boolean {
+  const latestIndex = latestUserIndex(messages);
+  const latestInput = messages[latestIndex]?.content ?? "";
+  const previousUserMessage = [...messages.slice(0, latestIndex)]
+    .reverse()
+    .find((message) => message.role === "user");
+
+  if (
+    assessment.contamination &&
+    /\b(?:sounds like|some kind of|maybe (?:it(?:'s| is)|that(?:'s| is))|probably (?:a|some)|must be)\b/i.test(
+      reply,
+    )
+  ) {
+    return false;
+  }
+
+  if (/\bgame of thrones\b/i.test(latestInput)) {
+    return /\b(?:book|novel|fantasy|george r\.? r\.? martin|martin)\b/i.test(
+      reply,
+    );
+  }
+
+  if (
+    assessment.conceptId === "future-dated-claim" &&
+    previousUserMessage &&
+    /\bgame of thrones\b/i.test(previousUserMessage.content)
+  ) {
+    return /\b(?:game of thrones|book|novel)\b/i.test(reply);
+  }
+
+  if (/\bquantum comput(?:er|ers|ing)\b/i.test(latestInput)) {
+    if (/\b(?:not (?:anything )?real|just sci[- ]?fi|wild sci[- ]?fi)\b/i.test(reply)) {
+      return false;
+    }
+
+    return /\b(?:research|experiment|laborator|scientist|physics|heard (?:of )?(?:the )?(?:term|idea))\b/i.test(
+      reply,
+    );
+  }
+
+  return true;
 }

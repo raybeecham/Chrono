@@ -200,3 +200,27 @@ Use this file to preserve evidence for the Devpost submission. Add an entry afte
 - Secret handling review confirmed both provider credentials are read only inside the server route, `.env.local` remains gitignored, and no credential value appears in the patch.
 
 **Remaining risk:** Wayback captures are externally hosted and may be incomplete or unavailable. Gemini free-tier capacity and model availability can change, and Google states free-tier content may be used to improve its products. Deterministic Sam preserves the core demo in both cases.
+
+## 2026-07-16: Sam dialogue calibration pass
+
+**Goal:** Correct dialogue that guessed invented meanings for future terms, overlooked pre-1998 source material, denied real 1998 research, or lost the conversational topic after a future-dated correction.
+
+**Decision:** Treat historical calibration as a server-verified constraint rather than relying on prompting alone. The live model may phrase Sam naturally, but Chrono rejects speculative categorization and known misreadings, then uses a topic-aware deterministic response.
+
+**Implemented:**
+
+- Instructed Sam not to invent categories for unknown names and not to repeat internal assessment labels as dialogue.
+- Added explicit calibration anchors for the 1996 novel *A Game of Thrones*, its distinction from a future television adaptation, and the real but experimental state of quantum computing in 1998.
+- Added a definite `future-dated-claim` integrity concept for statements such as “It’s a new show in 2019,” while leaving ordinary questions about a future year harmless.
+- Added contextual fallback replies that preserve the active topic and use the traveler’s wording rather than labels such as “modern generative AI” or “modern smartphone.”
+- Added a dialogue-calibration guard that rejects invented guesses about contaminated terms, misclassifying *A Game of Thrones* as a game, denying that quantum computing was real, or dropping the novel context during the 2019 follow-up.
+- Added five regression areas based directly on the reported conversation.
+
+**Validation:**
+
+- `npm test`: 34 tests passed.
+- `npm run lint`: passed.
+- TypeScript no-emit check: passed.
+- Live Gemini replay of the six supplied prompts kept all historical distinctions and conversational context intact. Calibration-rejected ChatGPT and iPhone guesses safely used neutral deterministic responses.
+
+**Remaining risk:** An open-ended fictional character can still vary stylistically. The guard targets factual and conversational failure modes rather than forcing every response into one script, and the deterministic fallback remains intentionally concise.
